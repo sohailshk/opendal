@@ -20,12 +20,6 @@ use std::io;
 use crate::*;
 
 /// Parse std io error into opendal::Error.
-///
-/// # TODO
-///
-/// Add `NotADirectory` and `IsADirectory` once they are stable.
-///
-/// ref: <https://github.com/rust-lang/rust/issues/86442>
 pub fn new_std_io_error(err: io::Error) -> Error {
     use std::io::ErrorKind::*;
 
@@ -34,6 +28,8 @@ pub fn new_std_io_error(err: io::Error) -> Error {
         PermissionDenied => (ErrorKind::PermissionDenied, false),
         AlreadyExists => (ErrorKind::AlreadyExists, false),
         Unsupported => (ErrorKind::Unsupported, false),
+        IsADirectory => (ErrorKind::IsADirectory, false),
+        NotADirectory => (ErrorKind::NotADirectory, false),
 
         Interrupted | UnexpectedEof | TimedOut | WouldBlock => (ErrorKind::Unexpected, true),
         _ => (ErrorKind::Unexpected, true),
@@ -67,6 +63,19 @@ pub(crate) fn format_std_io_error(err: Error) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_new_std_io_error_maps_directory_errors() {
+        let cases = [
+            (io::ErrorKind::IsADirectory, ErrorKind::IsADirectory),
+            (io::ErrorKind::NotADirectory, ErrorKind::NotADirectory),
+        ];
+        for (io_kind, kind) in cases {
+            let err = new_std_io_error(io::Error::from(io_kind));
+            assert_eq!(err.kind(), kind, "{io_kind}");
+            assert!(!err.is_temporary(), "{io_kind} must not be retried");
+        }
+    }
 
     #[test]
     fn test_read_to_end_stops_on_persistent_error() {
